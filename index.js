@@ -46,7 +46,7 @@ async function joinGlobalChat(ws, token) {
     try {
       const expectedOrigin = "tw-editor://.";
       const response = await axios.get(
-        `https://a.nxjxvxgy.repl.co/verify-token/${token}`,
+        `https://wllhh5-3000.csb.app/verify-token/${token}`,
         {
           headers: {
             Origin: expectedOrigin,
