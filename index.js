@@ -178,7 +178,12 @@ io.on("connection", (socket) => {
 });
 
 server.on("upgrade", (request, socket, head) => {
-  io.sockets.sockets[socket.id].emit("connection", socket, request, head);
+  io.handleUpgrade(request, socket, head, (ws) => {
+    io.emit("connection", ws, request);
+    io.sockets.sockets[ws.id] = ws;
+    io.emit("connection", ws, request);
+    io.emit("connection", ws, request, head);
+  });
 });
 
 const PORT = process.env.PORT || 3000;
