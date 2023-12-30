@@ -1,12 +1,11 @@
+const WebSocket = require("ws");
+const http = require("http");
 const fs = require("fs");
 const axios = require("axios");
-const socketIO = require("socket.io");
 const Limiter = require("limiter").RateLimiter;
-const express = require("express");
 
-const app = express();
-const server = require("http").createServer(app);
-const io = socketIO(server);
+const server = http.createServer();
+const wss = new WebSocket.Server({ noServer: true });
 
 const globalChatPlayers = new Map();
 let nextGlobalPlayerId = 1;
@@ -19,8 +18,8 @@ const tokenBucket = new Limiter({
   maxBurst: connectionBurst,
 });
 
-const messageRate = 1;
-const messageBurst = 1;
+const messageRate = 1; // Allow one message per second
+const messageBurst = 1; // Allow one message immediately, additional messages are rate-limited
 const messageTokenBucket = new Limiter({
   tokensPerInterval: messageRate,
   interval: "sec",
@@ -42,7 +41,7 @@ function containsBadWords(message) {
   return badWords.some((badWord) => lowercasedMessage.includes(badWord));
 }
 
-async function joinGlobalChat(socket, token) {
+async function joinGlobalChat(ws, token) {
   return new Promise(async (resolve, reject) => {
     try {
       const expectedOrigin = "tw-editor://.";
@@ -58,24 +57,26 @@ async function joinGlobalChat(socket, token) {
       if (response.data.message) {
         const playerId = response.data.message;
 
+        // Check if the player ID already exists
         if (globalChatPlayers.has(playerId)) {
-          socket.disconnect(4003, "Duplicate player ID");
+          ws.close(4003, "Duplicate player ID");
           reject("Duplicate player ID");
           return;
         }
 
-        globalChatPlayers.set(playerId, { socket });
+        globalChatPlayers.set(playerId, { ws });
 
-        socket.emit("chat", { type: "chat", messages: chatHistory });
+        // Send the entire chat history to the new connection
+        ws.send(JSON.stringify({ type: "chat", messages: chatHistory }));
 
         resolve({ playerId });
       } else {
-        socket.disconnect(4001, "Invalid token");
+        ws.close(4001, "Invalid token");
         reject("Invalid token");
       }
     } catch (error) {
       console.error("Error verifying token:", error);
-      socket.disconnect(4000, "Token verification error");
+      ws.close(4000, "Token verification error");
       reject("Token verification error");
     }
   });
@@ -84,6 +85,7 @@ async function joinGlobalChat(socket, token) {
 function broadcastGlobal(playerId, message) {
   const maxMessageLength = 100;
 
+  // Convert message to string
   const messageString = String(message);
 
   if (!messageString.trim()) {
@@ -91,11 +93,13 @@ function broadcastGlobal(playerId, message) {
     return;
   }
 
+  // Check if the message length exceeds the limit
   if (messageString.length > maxMessageLength) {
     console.error("Message too long:", messageString);
     return;
   }
 
+  // Check if the message sending rate limit is exceeded
   if (!messageTokenBucket.tryRemoveTokens(1)) {
     console.error("Message rate limit exceeded:", messageString);
     return;
@@ -103,6 +107,7 @@ function broadcastGlobal(playerId, message) {
 
   const containsBad = containsBadWords(messageString);
 
+  // Replace bad words with asterisks if the message contains any
   let filteredMessage = messageString;
   if (containsBad) {
     filteredMessage = "***";
@@ -110,8 +115,9 @@ function broadcastGlobal(playerId, message) {
 
   const limitedMessage = filteredMessage.substring(0, maxMessageLength);
 
-  const timestamp = new Date().toLocaleTimeString();
+  const timestamp = new Date().toLocaleTimeString(); // Get the current time as a timestamp
 
+  // Add the new message to the chat history
   const newMessage = {
     id: chatHistory.length + 1,
     timestamp: timestamp,
@@ -121,34 +127,39 @@ function broadcastGlobal(playerId, message) {
 
   chatHistory.push(newMessage);
 
+  // Trim the chat history to keep only the last 'maxMessages' messages
   if (chatHistory.length > maxMessages) {
     chatHistory.splice(0, chatHistory.length - maxMessages);
   }
 
-  io.emit("chat", { type: "chat", messages: chatHistory });
+  for (const [id, player] of globalChatPlayers) {
+    player.ws.send(JSON.stringify({ type: "chat", messages: chatHistory }));
+  }
 }
 
-io.on("connection", (socket) => {
-  const token = socket.handshake.query.token;
+wss.on("connection", (ws, req) => {
+  const token = req.url.slice(1);
 
-  if (!allowedOrigins.includes(socket.handshake.headers.origin)) {
-    socket.disconnect(4004, "Unauthorized origin");
+  // Check if the request origin is allowed
+  if (!allowedOrigins.includes(req.headers.origin)) {
+    ws.close(4004, "Unauthorized origin");
     return;
   }
 
   if (tokenBucket.tryRemoveTokens(1)) {
-    joinGlobalChat(socket, token)
+    joinGlobalChat(ws, token)
       .then((result) => {
         if (result) {
           console.log("Joined global chat:", result);
 
-          socket.on("chat", (data) => {
+          ws.on("message", (message) => {
+            const data = JSON.parse(message);
             if (data.type === "chat") {
               broadcastGlobal(result.playerId, data.message);
             }
           });
 
-          socket.on("disconnect", () => {
+          ws.on("close", () => {
             globalChatPlayers.delete(result.playerId);
           });
         } else {
@@ -160,13 +171,19 @@ io.on("connection", (socket) => {
       });
   } else {
     console.log(
-      "Connection rate-limited. Too many connections in a short period."
+      "Connection rate-limited. Too many connections in a short period.",
     );
-    socket.disconnect(
+    ws.close(
       4002,
-      "Connection rate-limited. Too many connections in a short period."
+      "Connection rate-limited. Too many connections in a short period.",
     );
   }
+});
+
+server.on("upgrade", (request, socket, head) => {
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit("connection", ws, request);
+  });
 });
 
 const PORT = process.env.PORT || 3000;
@@ -178,8 +195,8 @@ const allowedOrigins = [
   "tw-editor://.",
   "https://turbowarp.org",
   "http://serve.gamejolt.net",
-];
+]; // Add your allowed origins
 
 server.listen(PORT, () => {
   console.log(`Server is listening on port ${PORT}`);
-});
+}); 
