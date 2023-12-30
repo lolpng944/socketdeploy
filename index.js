@@ -1,10 +1,11 @@
-const http = require("http");
 const fs = require("fs");
 const axios = require("axios");
 const socketIO = require("socket.io");
 const Limiter = require("limiter").RateLimiter;
+const express = require("express");
 
-const server = http.createServer();
+const app = express();
+const server = require("http").createServer(app);
 const io = socketIO(server);
 
 const globalChatPlayers = new Map();
@@ -18,8 +19,8 @@ const tokenBucket = new Limiter({
   maxBurst: connectionBurst,
 });
 
-const messageRate = 1; // Allow one message per second
-const messageBurst = 1; // Allow one message immediately, additional messages are rate-limited
+const messageRate = 1;
+const messageBurst = 1;
 const messageTokenBucket = new Limiter({
   tokensPerInterval: messageRate,
   interval: "sec",
@@ -57,7 +58,6 @@ async function joinGlobalChat(socket, token) {
       if (response.data.message) {
         const playerId = response.data.message;
 
-        // Check if the player ID already exists
         if (globalChatPlayers.has(playerId)) {
           socket.disconnect(4003, "Duplicate player ID");
           reject("Duplicate player ID");
@@ -66,7 +66,6 @@ async function joinGlobalChat(socket, token) {
 
         globalChatPlayers.set(playerId, { socket });
 
-        // Send the entire chat history to the new connection
         socket.emit("chat", { type: "chat", messages: chatHistory });
 
         resolve({ playerId });
@@ -85,7 +84,6 @@ async function joinGlobalChat(socket, token) {
 function broadcastGlobal(playerId, message) {
   const maxMessageLength = 100;
 
-  // Convert message to string
   const messageString = String(message);
 
   if (!messageString.trim()) {
@@ -93,13 +91,11 @@ function broadcastGlobal(playerId, message) {
     return;
   }
 
-  // Check if the message length exceeds the limit
   if (messageString.length > maxMessageLength) {
     console.error("Message too long:", messageString);
     return;
   }
 
-  // Check if the message sending rate limit is exceeded
   if (!messageTokenBucket.tryRemoveTokens(1)) {
     console.error("Message rate limit exceeded:", messageString);
     return;
@@ -107,7 +103,6 @@ function broadcastGlobal(playerId, message) {
 
   const containsBad = containsBadWords(messageString);
 
-  // Replace bad words with asterisks if the message contains any
   let filteredMessage = messageString;
   if (containsBad) {
     filteredMessage = "***";
@@ -115,9 +110,8 @@ function broadcastGlobal(playerId, message) {
 
   const limitedMessage = filteredMessage.substring(0, maxMessageLength);
 
-  const timestamp = new Date().toLocaleTimeString(); // Get the current time as a timestamp
+  const timestamp = new Date().toLocaleTimeString();
 
-  // Add the new message to the chat history
   const newMessage = {
     id: chatHistory.length + 1,
     timestamp: timestamp,
@@ -127,7 +121,6 @@ function broadcastGlobal(playerId, message) {
 
   chatHistory.push(newMessage);
 
-  // Trim the chat history to keep only the last 'maxMessages' messages
   if (chatHistory.length > maxMessages) {
     chatHistory.splice(0, chatHistory.length - maxMessages);
   }
@@ -138,7 +131,6 @@ function broadcastGlobal(playerId, message) {
 io.on("connection", (socket) => {
   const token = socket.handshake.query.token;
 
-  // Check if the request origin is allowed
   if (!allowedOrigins.includes(socket.handshake.headers.origin)) {
     socket.disconnect(4004, "Unauthorized origin");
     return;
@@ -177,10 +169,6 @@ io.on("connection", (socket) => {
   }
 });
 
-server.on("upgrade", (request, socket, head) => {
-  io.sockets.sockets[socket.id].emit("connection", socket, request, head);
-});
-
 const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
   "https://slcount.netlify.app",
@@ -190,8 +178,8 @@ const allowedOrigins = [
   "tw-editor://.",
   "https://turbowarp.org",
   "http://serve.gamejolt.net",
-]; // Add your allowed origins
+];
 
 server.listen(PORT, () => {
   console.log(`Server is listening on port ${PORT}`);
-}); 
+});
