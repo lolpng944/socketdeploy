@@ -178,9 +178,7 @@ io.on("connection", (socket) => {
 });
 
 server.on("upgrade", (request, socket, head) => {
-  io.handleUpgrade(request, socket, head, (socket) => {
-    io.emit("connection", socket, request);
-  });
+  io.sockets.sockets[socket.id].emit("connection", socket, request);
 });
 
 const PORT = process.env.PORT || 3000;
