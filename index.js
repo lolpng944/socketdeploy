@@ -1,11 +1,11 @@
-const WebSocket = require("ws");
 const http = require("http");
 const fs = require("fs");
 const axios = require("axios");
+const socketIO = require("socket.io");
 const Limiter = require("limiter").RateLimiter;
 
 const server = http.createServer();
-const wss = new WebSocket.Server({ noServer: true });
+const io = socketIO(server);
 
 const globalChatPlayers = new Map();
 let nextGlobalPlayerId = 1;
@@ -41,7 +41,7 @@ function containsBadWords(message) {
   return badWords.some((badWord) => lowercasedMessage.includes(badWord));
 }
 
-async function joinGlobalChat(ws, token) {
+async function joinGlobalChat(socket, token) {
   return new Promise(async (resolve, reject) => {
     try {
       const expectedOrigin = "tw-editor://.";
@@ -59,24 +59,24 @@ async function joinGlobalChat(ws, token) {
 
         // Check if the player ID already exists
         if (globalChatPlayers.has(playerId)) {
-          ws.close(4003, "Duplicate player ID");
+          socket.disconnect(4003, "Duplicate player ID");
           reject("Duplicate player ID");
           return;
         }
 
-        globalChatPlayers.set(playerId, { ws });
+        globalChatPlayers.set(playerId, { socket });
 
         // Send the entire chat history to the new connection
-        ws.send(JSON.stringify({ type: "chat", messages: chatHistory }));
+        socket.emit("chat", { type: "chat", messages: chatHistory });
 
         resolve({ playerId });
       } else {
-        ws.close(4001, "Invalid token");
+        socket.disconnect(4001, "Invalid token");
         reject("Invalid token");
       }
     } catch (error) {
       console.error("Error verifying token:", error);
-      ws.close(4000, "Token verification error");
+      socket.disconnect(4000, "Token verification error");
       reject("Token verification error");
     }
   });
@@ -132,34 +132,31 @@ function broadcastGlobal(playerId, message) {
     chatHistory.splice(0, chatHistory.length - maxMessages);
   }
 
-  for (const [id, player] of globalChatPlayers) {
-    player.ws.send(JSON.stringify({ type: "chat", messages: chatHistory }));
-  }
+  io.emit("chat", { type: "chat", messages: chatHistory });
 }
 
-wss.on("connection", (ws, req) => {
-  const token = req.url.slice(1);
+io.on("connection", (socket) => {
+  const token = socket.handshake.query.token;
 
   // Check if the request origin is allowed
-  if (!allowedOrigins.includes(req.headers.origin)) {
-    ws.close(4004, "Unauthorized origin");
+  if (!allowedOrigins.includes(socket.handshake.headers.origin)) {
+    socket.disconnect(4004, "Unauthorized origin");
     return;
   }
 
   if (tokenBucket.tryRemoveTokens(1)) {
-    joinGlobalChat(ws, token)
+    joinGlobalChat(socket, token)
       .then((result) => {
         if (result) {
           console.log("Joined global chat:", result);
 
-          ws.on("message", (message) => {
-            const data = JSON.parse(message);
+          socket.on("chat", (data) => {
             if (data.type === "chat") {
               broadcastGlobal(result.playerId, data.message);
             }
           });
 
-          ws.on("close", () => {
+          socket.on("disconnect", () => {
             globalChatPlayers.delete(result.playerId);
           });
         } else {
@@ -171,18 +168,18 @@ wss.on("connection", (ws, req) => {
       });
   } else {
     console.log(
-      "Connection rate-limited. Too many connections in a short period.",
+      "Connection rate-limited. Too many connections in a short period."
     );
-    ws.close(
+    socket.disconnect(
       4002,
-      "Connection rate-limited. Too many connections in a short period.",
+      "Connection rate-limited. Too many connections in a short period."
     );
   }
 });
 
 server.on("upgrade", (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit("connection", ws, request);
+  io.handleUpgrade(request, socket, head, (socket) => {
+    io.emit("connection", socket, request);
   });
 });
 
