@@ -190,11 +190,6 @@ const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
   "https://slcount.netlify.app",
   "https://slgame.netlify.app",
-  "https://serve.gamejolt.net",
-  "https://html-classic.itch.zone",
-  "tw-editor://.",
-  "https://turbowarp.org",
-  "http://serve.gamejolt.net",
 ]; // Add your allowed origins
 
 server.listen(PORT, () => {
