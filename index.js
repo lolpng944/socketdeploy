@@ -189,7 +189,9 @@ server.on("upgrade", (request, socket, head) => {
 const PORT = process.env.PORT || 3000;
 const allowedOrigins = [
   "https://slcount.netlify.app",
-  "https://slgame.netlify.app",
+    "https://slgame.netlify.app",
+    "https://serve.gamejolt.net",
+    "http://serve.gamejolt.net",
 ]; // Add your allowed origins
 
 server.listen(PORT, () => {
