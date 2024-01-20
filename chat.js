@@ -44,7 +44,9 @@ const allowedOrigins = [
 ];
 
 function isValidOrigin(origin) {
-  return allowedOrigins.includes(origin);
+  // Trim leading and trailing spaces, and remove leading and trailing commas before checking
+  const trimmedOrigin = origin.trim().replace(/(^,)|(,$)/g, '');
+  return allowedOrigins.includes(trimmedOrigin);
 }
 
 function containsBadWords(message) {
@@ -151,7 +153,10 @@ function cleanUpClosedConnections() {
 wss.on("connection", (ws, req) => {
   const token = req.url.slice(1);
 
-  if (!isValidOrigin(req.headers.origin)) {
+   const origin = req.headers['sec-websocket-origin'] || req.headers.origin;
+  console.log(origin);
+
+  if (!isValidOrigin(origin)) {
     ws.close(4004, "Unauthorized origin");
     return;
   }
