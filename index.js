@@ -3,7 +3,7 @@ const http = require("http");
 const fs = require("fs");
 const axios = require("axios");
 const Limiter = require("limiter").RateLimiter;
-const keeper = require('./keeper.js');
+const keeper = require("./keeper.js");
 
 const server = http.createServer();
 const wss = new WebSocket.Server({ noServer: true });
