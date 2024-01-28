@@ -41,6 +41,7 @@ const allowedOrigins = [
   "https://slgame.netlify.app",
   "https://serve.gamejolt.net",
   "http://serve.gamejolt.net",
+  "https://html-classic.itch.zone",
 ];
 
 function isValidOrigin(origin) {
