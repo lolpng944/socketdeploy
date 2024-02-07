@@ -61,7 +61,7 @@ async function joinGlobalChat(ws, token) {
     try {
       const expectedOrigin = "tw-editor://.";
       const response = await axios.get(
-        `https://51ea1a21-4526-499d-b3f7-2d46e00a3762-00-7py6a38m7qpi.riker.replit.dev/verify-token/${token}`,
+        `https://liquemgames-api.netlify.app/verify-token/${token}`,
         {
           headers: {
             Origin: expectedOrigin,
