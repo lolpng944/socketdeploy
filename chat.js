@@ -42,6 +42,7 @@ const allowedOrigins = [
   "https://serve.gamejolt.net",
   "http://serve.gamejolt.net",
   "https://html-classic.itch.zone",
+  "tw-editor://.",
 ];
 
 function isValidOrigin(origin) {
