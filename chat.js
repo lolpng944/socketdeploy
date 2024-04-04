@@ -5,13 +5,13 @@ const axios = require("axios");
 const Limiter = require("limiter").RateLimiter;
 
 const server = http.createServer();
-const wss = new WebSocket.Server({ noServer: true });
+const wss = new WebSocket.Server({ noServer: true, clientTracking: true, proxy: true });
 
 const globalChatPlayers = new Map();
 let nextGlobalPlayerId = 1;
 
 const connectionRate = 1;
-const connectionBurst = 5;
+const connectionBurst = 1;
 const tokenBucket = new Limiter({
   tokensPerInterval: connectionRate,
   interval: "sec",
