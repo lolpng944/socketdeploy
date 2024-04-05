@@ -5,7 +5,7 @@ const axios = require("axios");
 const Limiter = require("limiter").RateLimiter;
 
 const server = http.createServer();
-const wss = new WebSocket.Server({ noServer: true, clientTracking: true, proxy: true });
+const wss = new WebSocket.Server({ noServer: true, proxy: true }); //clientTracking: true (enable default user count by wss
 
 const globalChatPlayers = new Map();
 let nextGlobalPlayerId = 1;
