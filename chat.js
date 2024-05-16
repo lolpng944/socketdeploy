@@ -3,6 +3,8 @@ const http = require("http");
 const fs = require("fs");
 const axios = require("axios");
 const Limiter = require("limiter").RateLimiter;
+const { RateLimiterMemory } = require('rate-limiter-flexible');
+
 
 const server = http.createServer();
 const wss = new WebSocket.Server({ noServer: true, proxy: true }); //clientTracking: true (enable default user count by wss
@@ -25,6 +27,13 @@ const messageTokenBucket = new Limiter({
   interval: "sec",
   maxBurst: messageBurst,
 });
+
+const ConnectionOptionsRateLimit = {
+  points: 1, // Number of points
+  duration: 5, // Per second
+};
+
+const rateLimiterConnection = new RateLimiterMemory(ConnectionOptionsRateLimit);
 
 const maxMessages = 4;
 const chatHistory = [];
@@ -153,9 +162,17 @@ function cleanUpClosedConnections() {
 }
 
 wss.on("connection", (ws, req) => {
+  // Handle errors that might occur during connection establishment
+  ws.on("error", (error) => {
+    console.error("WebSocket connection error:", error);
+    // Optionally close the connection
+    ws.close(1011, "Unexpected error");
+  });
+
+  rateLimiterConnection.consume(req.headers['x-forwarded-for']);
   const token = req.url.slice(1);
 
-   const origin = req.headers['sec-websocket-origin'] || req.headers.origin;
+  const origin = req.headers['sec-websocket-origin'] || req.headers.origin;
   console.log(origin);
 
   if (!isValidOrigin(origin)) {
@@ -163,42 +180,39 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  if (tokenBucket.tryRemoveTokens(1)) {
-    joinGlobalChat(ws, token)
-      .then((result) => {
-        if (result) {
-          console.log("Joined global chat:", result);
+  joinGlobalChat(ws, token)
+    .then((result) => {
+      if (result) {
+        console.log("Joined global chat:", result);
 
-          ws.on("message", (message) => {
-            try {
-              const data = JSON.parse(message);
-              if (data.type === "chat") {
-                broadcastGlobal(result.playerId, data.message);
-              }
-            } catch (error) {
-              console.error("Error parsing message:", error);
+        ws.on("message", (message) => {
+          try {
+            const data = JSON.parse(message);
+            if (data.type === "chat") {
+              broadcastGlobal(result.playerId, data.message);
             }
-          });
+          } catch (error) {
+            console.error("Error parsing message:", error);
+          }
+        });
 
-          ws.on("close", () => {
-            globalChatPlayers.delete(result.playerId);
-          });
-        } else {
-          console.error("Failed to join global chat:", result);
-        }
-      })
-      .catch((error) => {
-        console.error("Error joining global chat:", error);
-        ws.close(4005, "Internal Server Error");
-      })
-      .finally(() => {
-        cleanUpClosedConnections();
-      });
-  } else {
-    console.log("Connection rate-limited. Too many connections in a short period.");
-    ws.close(4002, "Connection rate-limited. Too many connections in a short period.");
-  }
+        ws.on("close", () => {
+          globalChatPlayers.delete(result.playerId);
+        });
+      } else {
+        console.error("Failed to join global chat:", result);
+      }
+    })
+    .catch((error) => {
+      console.error("Error joining global chat:", error);
+      ws.close(4005, "Internal Server Error");
+    })
+    .finally(() => {
+      cleanUpClosedConnections();
+    });
 });
+
+
 
 server.on("upgrade", (request, socket, head) => {
   wss.handleUpgrade(request, socket, head, (ws) => {
