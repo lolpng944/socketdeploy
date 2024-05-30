@@ -47,11 +47,16 @@ const badWords = fs
 
 const allowedOrigins = [
   "https://slcount.netlify.app",
-  "https://slgame.netlify.app",
+ "https://s-r.netlify.app",
   "https://serve.gamejolt.net",
   "http://serve.gamejolt.net",
   "https://html-classic.itch.zone",
   "tw-editor://.",
+    "https://www.newgrounds.com/portal/view/5561763",
+  "https://www.newgrounds.com/projects/games/5561763/preview",
+  "https://prod-dpgames.crazygames.com",
+  "https://crazygames.com",
+   "https://crazygames.com/game/skilled-royale"
 ];
 
 function isValidOrigin(origin) {
