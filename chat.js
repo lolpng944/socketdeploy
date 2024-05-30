@@ -220,6 +220,16 @@ server.on("upgrade", (request, socket, head) => {
   });
 });
 
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+});
+
+// Global error handler for unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection:', reason, promise);
+});
+
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
